@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/img">
+        <file>res/add.png</file>
+        <file>res/begin_2.jfif</file>
+        <file>res/stop.png</file>
+    </qresource>
+</RCC>
