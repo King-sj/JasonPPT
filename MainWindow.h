@@ -2,7 +2,8 @@
 
 #include "ui_MainWindow.h"
 #include <QMainWindow>
-#include"ImgForm.h"
+//#include"ImgForm.h"
+#include"VMItem.h"
 #include"Dialog_VideoJParameterSetting.h"
 #include<QVector>
 #include<QPointer>
@@ -13,7 +14,7 @@
 #include<QThread>
 #include<QSet>
 #include<QProcess>
-
+#include"ComposeVideoManager.h"
 // ffmpeg 是纯 C 语言的代码，在 C++ 当中不能直接进行 include
 extern "C" {
     #include <libavcodec/avcodec.h>
@@ -29,6 +30,7 @@ class MainWindow : public QMainWindow, private Ui::MainWindow
 {
     Q_OBJECT
 //    QThread* playVideoThread;
+
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -52,7 +54,7 @@ private:
     bool saveImg(QString fileName,const QImage& img);
     bool saveVedio(QString toFileName);
     void rebuiltFolder();
-    QPointer<ImgForm> getNewImgForm();
+    VMItem* getNewVMItem();
     void mergeVideoAndBgm(QString videoFileName ,QString musicFileName);
     QString getFormatTime(int seconds);
     void addPauseToBat();
@@ -61,7 +63,7 @@ private:
     QString changeVideoFPS(QString fileName , int fps);
 private slots:
     void dealImgFormSignal_loadDone();
-    void do_signal_delete(QPointer<ImgForm> p);
+    void do_signal_delete(ImgForm* p);
     void do_triggered_action_INSERT_NEW_IMGFORM();
     void on_actionImportMusic_triggered();
 
@@ -72,13 +74,19 @@ private slots:
     void slot_cmdfinished();
 
 //    void pngTomp4_2();
+    void do_signalProcessInformationText(QString processInformationText);
+    void do_signalProcess(double pro);
+    void do_signalNextStage(QString stage);
+    void do_signalNewImg(QImage img);
 private:
     virtual void paintEvent(QPaintEvent* e)override;
     virtual void mousePressEvent(QMouseEvent* e)override;
     virtual void keyPressEvent(QKeyEvent* e)override;
 private:
     int imgWidth = 320;
-    int imgHeight = 240;
+    int imgHeight = 240;//在界面上显示的大小
+    int videoWidth = 1280;
+    int videoHeight = 720;//输出的大小
     int pos = 0;
     int interval = 5;
     int border = imgWidth / 2;
@@ -89,10 +97,15 @@ private:
     Dialog_VideoJParameterSetting::Parameters _parameters;
     PlayVideo* playVideo;
     QString musicFileName ="";
+//    QVector<>
     QString musicFileNames_txt ="./temp/targetBgm.txt";
     QPointer<QProcess> process;
+
+    QThread* composeVideoManagerThread;
+    ComposeVideoManager* composeVideoManager;
+    QString _stage="";
 private:
-    QVector< QPointer<ImgForm> >vector_ImgForm;
+    QVector< VMItem* >vector_VMItem;
     QSet<int>fpsList;
 
 //ffmpeg:
@@ -105,4 +118,5 @@ private:
     void initFFMPEG();
 signals:
     void sendcontext(AVFormatContext*,AVCodecContext*,AVCodecContext*,SwrContext*);
+    void signalComposeVideo(QVector<VMItem*> imgForms,Dialog_VideoJParameterSetting::Parameters parameters,const QVector<QString>& _musicFileNames);
 };

@@ -1,4 +1,4 @@
-﻿#pragma execution_character_set("utf-8")
+﻿//#pragma execution_character_set("utf-8")
 
 #include "MainWindow.h"
 #include<QDir>
@@ -15,8 +15,7 @@
 #include<QStringList>
 #include<QFile>
 #include<QTextStream>
-
-
+#include<QtCore5Compat/QTextCodec>
 
 using namespace std;
 using namespace cv;
@@ -25,6 +24,22 @@ MainWindow::MainWindow(QWidget *parent)
 {
 
     setupUi(this);
+
+
+//#if (QT_VERSION <= QT_VERSION_CHECK(5,0,0))
+//#if _MSC_VER
+//QTextCodec *codec = QTextCodec::codecForName("gbk");
+//#else
+//QTextCodec *codec = QTextCodec::codecForName("utf-8");
+//#endif
+//QTextCodec::setCodecForLocale(codec);
+//QTextCodec::setCodecForCStrings(codec);
+//QTextCodec::setCodecForTr(codec);
+//#else
+//QTextCodec *codec = QTextCodec::codecForName("utf-8");
+//QTextCodec::setCodecForLocale(codec);
+//#endif
+
 //    initFFMPEG();
 
 //    av_register_all();//已弃用
@@ -33,10 +48,13 @@ MainWindow::MainWindow(QWidget *parent)
     /*
      * 放setupUI后创建，否则无反应
     */
-    this->showMaximized();
+    //bug:此处突然崩溃了{拒绝绘制}{date:2023/3/15}
+//    this->showMaximized();
+
+    this->label_temp->hide();
 
     setFocus();//获取焦点
-    vector_ImgForm.clear();
+    vector_VMItem.clear();
     vedioParameEdit = nullptr;
     playVideo = NULL;
     init();
@@ -56,19 +74,58 @@ MainWindow::MainWindow(QWidget *parent)
 //    //启动线程类的任何方法都应该通过信号-槽
 
 //    this->progressBar->hide();
+//________________________________________________________________________________________________________//
+    //视频合成线程管理类
+    composeVideoManager = new ComposeVideoManager();
+    composeVideoManagerThread = new QThread();
+    composeVideoManager->moveToThread(composeVideoManagerThread);
+    connect(composeVideoManagerThread,&QThread::finished,composeVideoManager,&QObject::deleteLater);//销毁对象
+    connect(composeVideoManagerThread,&QThread::finished,composeVideoManager,&QThread::deleteLater);//多线程自销毁
+    connect(composeVideoManager,&ComposeVideoManager::signalProcessInformationText,
+            this,&MainWindow::do_signalProcessInformationText);
+    connect(composeVideoManager,&ComposeVideoManager::signalProcess,
+            this,&MainWindow::do_signalProcess);
+    connect(composeVideoManager,&ComposeVideoManager::signalNextStage,
+            this,&MainWindow::do_signalNextStage);
+    connect(composeVideoManager,&ComposeVideoManager::signalNewImg,
+            this,&MainWindow::do_signalNewImg);
+
+    connect(this,&MainWindow::signalComposeVideo,composeVideoManager,&ComposeVideoManager::composeNewVideo);
+
+
+    composeVideoManagerThread->start();
+
+//________________________________________________________________________________________________________//
+
     this->progressBar->setVisible(false);
     this->progressBar->setTextVisible(false);
     this->progressBar->setMinimum(0);
 
     process = nullptr;
+
+    this->processLog->setText("运行结果为:\n");
+    this->processLog->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    this->processLog->hide();
 }
 
 MainWindow::~MainWindow()
 {
+    try {
+        composeVideoManagerThread->quit();
+        composeVideoManagerThread->wait();
+    } catch (...) {
+        cout<<"close composeVideoManagerThread failed or it have finished\n";
+    }
+
     if(vedioParameEdit)
         delete vedioParameEdit;
     vedioParameEdit = nullptr;
-
+//    for(auto& t:vector_VMItem)
+//    {
+//        delete t;
+//        t = nullptr;
+//    }
+    vector_VMItem.clear();
 //    /*
 //     * 结束线程
 //    */
@@ -83,12 +140,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::init()
 {
-    QPointer<ImgForm> temp = getNewImgForm();
-    vector_ImgForm.append(temp);
-//    connect(vector_ImgForm[0] , &ImgForm::loadDone , this , &MainWindow::dealImgFormSignal_loadDone);
-
-//    connect(vector_ImgForm[0] , &ImgForm::signal_delete , this , &MainWindow::dealImgFormSignal_loadDone);
-
+    VMItem* temp = getNewVMItem();
+    vector_VMItem.append(temp);
 }
 
 inline QPoint MainWindow::getCenterPointForRectRegion(int width, int height)
@@ -101,25 +154,31 @@ void MainWindow::paintEvent(QPaintEvent *e)
     auto centerP = getCenterPointForRectRegion(imgWidth,imgHeight);
     this->label->move(getCenterPointForRectRegion(this->label->width(),0).x(),0);
     //右边的
-    for(auto& img : vector_ImgForm)
+    for(auto& img : vector_VMItem)
     {
-        img->hide();
+        img->getVMItem()->hide();
     }
-    for(int i = pos ; i < vector_ImgForm.size() ; i++)
+    for(int i = pos ; i < vector_VMItem.size() ; i++)
     {
-        vector_ImgForm[i]->move(centerP.x() + (i - pos)*(imgWidth+interval) + border, centerP .y());
-        if(vector_ImgForm[i]->geometry().x() > this->width())
+        vector_VMItem[i]->getVMItem()->move(centerP.x() + (i - pos)*(imgWidth+interval) + border, centerP .y());
+        if(vector_VMItem[i]->getVMItem()->geometry().x() > this->width())
             break;
-        vector_ImgForm[i]->show();
+        vector_VMItem[i]->getVMItem()->show();
     }
     //左边的
     for(int i = pos - 1 ; i >= 0 ; i--)
     {
-        vector_ImgForm[i]->move(centerP.x() + (i - pos)*(imgWidth+interval) + border , centerP .y());
-        if(vector_ImgForm[i]->geometry().y() < -imgWidth)
+        vector_VMItem[i]->getVMItem()->move(centerP.x() + (i - pos)*(imgWidth+interval) + border , centerP .y());
+        if(vector_VMItem[i]->getVMItem()->geometry().y() < -imgWidth)
             break;
-        vector_ImgForm[i]->show();
+        vector_VMItem[i]->getVMItem()->show();
     }
+
+    this->processLog->resize(this->processLog->width(),
+                             this->height() - this->vector_VMItem[0]->getVMItem()->pos().y()
+            - this->vector_VMItem[0]->getVMItem()->width);
+    this->processLog->move(0,
+                             this->height() - this->vector_VMItem[0]->getVMItem()->pos().y() + 10);
     e->accept();
 }
 
@@ -142,11 +201,11 @@ void MainWindow::keyPressEvent(QKeyEvent *e)
     }
     if(e->key() == Qt::Key_Right)
     {
-        if(pos < vector_ImgForm.size() - 1)
+        if(pos < vector_VMItem.size() - 1)
             pos++;
     }
     //cout<<"pos:"<<pos<<" imgNum: "<<imgNum<<"\n";
-    this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_ImgForm.size()-1));
+    this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_VMItem.size()-1));
     e->accept();
 }
 
@@ -395,23 +454,31 @@ QString MainWindow::changeVideoFPS(QString _fileName, int fps)
 
 void MainWindow::dealImgFormSignal_loadDone()
 {
-    QPointer<ImgForm> temp = getNewImgForm();
-    vector_ImgForm.append(temp);
-//    connect(vector_ImgForm[vector_ImgForm.size() - 1] , &ImgForm::loadDone , this , &MainWindow::dealImgFormSignal_loadDone);
-    if(vector_ImgForm.size() > 2)
+    VMItem* temp = getNewVMItem();
+    vector_VMItem.append(temp);
+    if(vector_VMItem.size() > 2)
         pos++;
-    this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_ImgForm.size()-1));
+    this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_VMItem.size()-1));
 }
 
-void MainWindow::do_signal_delete(QPointer<ImgForm> p)
+void MainWindow::do_signal_delete(ImgForm* p)
 {
     //note:Three are some bugs when delete a imgform in multiple imgforms but it done well in just one imgform
-    for(auto i = vector_ImgForm.begin() ; i != vector_ImgForm.end() ; i++)
+//    for(auto i = vector_VMItem.begin() ; i != vector_VMItem.end() ; i++)
+//    {
+//        if(vector_VMItem[i]->getVMItem() == p)
+//        {
+//            cout<<"delete "<<i->data()->getVMItem()->getFileName()<<endl;
+//            vector_VMItem.erase(i);
+//            break;
+//        }
+//    }
+    for(int i = 0 ; i < vector_VMItem.size() ; i++)
     {
-        if(i->data() == p)
+        if(vector_VMItem[i]->getVMItem() == p)
         {
-            cout<<"delete "<<i->data()->getFileName()<<endl;
-            vector_ImgForm.erase(i);
+            cout<<"delete "<<vector_VMItem[i]->getVMItem()->getFileName()<<endl;
+            vector_VMItem.erase(vector_VMItem.begin()+i);
             break;
         }
     }
@@ -469,7 +536,9 @@ void MainWindow::onTaskBoxContextMenuEvent()
 void MainWindow::composeVideo()
 {
     //添加进度
-    this->progressBar->setMaximum(vector_ImgForm.size()+1);
+    this->processLog->show();
+
+    this->progressBar->setMaximum(1000);//note:we asume it's default
     this->progressBar->setValue(1);
 //    this->progressBar->setTextVisible(true);
     this->progressBar->setFormat("解码中");
@@ -481,69 +550,9 @@ void MainWindow::composeVideo()
 
     update();
 //    auto cap = new VideoCapture();
-    imgNum = 0;
-    int proc = 1;//进度
-
-    int time = 0 ,fps = 0;
-    for(const auto& file : vector_ImgForm)
-    {
-
-        this->progressBar->setValue(proc);
-//        update();//it's invalid
-        repaint(QRect(this->progressBar->pos(),this->progressBar->size()));
-        if(file->getType() == ImgForm::TYPE::IMG)
-        {
-            if(file->getIsSpecial())
-            {
-                time = file->deaultTime;
-                fps = file->fps;
-            }else{
-                time = _parameters.img_time_default;
-                fps = _parameters.fps;
-            }
-
-            for(int j = time*fps ; j > 0 ; j--)
-                if(saveImg(temp_imgs_folder+ QString::number(imgNum)+".png",QImage(file->getFileName()) ) )
-                {
-                    imgNum++;
-                }else{
-                    QMessageBox::warning(NULL,"img","解码失败");
-                }
-        }else if(file->getType() == ImgForm::TYPE::VIDEO){
-            video2imgs(file->getFileName() , imgNum);
-        }
-        proc++;
-    }
-    this->progressBar->setFormat("合成视频中");
-    this->progressBar->setValue(0);
-    this->progressBar->setMaximum(imgNum);
-    if(!imgs2video(temp_imgs_folder))
-    {//生成视频失败
-        return;
-    }
-
-    this->progressBar->setVisible(false);
-    update();
-    auto msb = QMessageBox();
-    msb.setText("合成视频结束");
-    msb.exec();
-
-    auto msb1 = QMessageBox();
-    msb1.setText("正在替换BGM");
-    msb1.exec();
-    //添加音频
-    if(musicFileName != "")
-    {
-        this->mergeVideoAndBgm(_parameters.export_file_path+"/temp.mp4" , musicFileName);
-    }
-    else
-    {
-        QMessageBox::information(NULL,"","未添加音频");
-        return;
-    }
-    auto msb2 = QMessageBox();
-    msb2.setText("替换BGM结束");
-    msb2.exec();
+    QVector<QString> musicnames;
+    musicnames.append(musicFileName);
+    emit signalComposeVideo(this->vector_VMItem,this->_parameters,musicnames);
 }
 
 bool MainWindow::imgs2video(QString folderName)
@@ -589,7 +598,7 @@ bool MainWindow::imgs2video(QString folderName)
         vw << image;
         try {
             //防止最大值达不到
-            this->progressBar->setValue(i);
+            this->progressBar->setValue(static_cast<int>(i));
             update();
         } catch (...) {
         }
@@ -617,6 +626,7 @@ bool MainWindow::video2imgs(QString fileName,int pos)
     if(fps == -1){
         return false;
     }
+
     if(_parameters.fps != fps)
     {   //帧率切换
         QMessageBox::information(NULL,"","开始更改素材视频帧率");
@@ -715,15 +725,15 @@ void MainWindow::rebuiltFolder()
     dir.mkpath("temp/result");
 }
 
-QPointer<ImgForm> MainWindow::getNewImgForm()
+VMItem* MainWindow::getNewVMItem()
 {
     /*
      * 不应该单独创建对象，而要自定义函数创建对象(尤其是需要多次创建的对象),这样可以方便绑定信号和槽
     */
-    QPointer<ImgForm> temp = new ImgForm(this,imgWidth,imgHeight);
-    connect(temp , &ImgForm::loadDone , this , &MainWindow::dealImgFormSignal_loadDone);
+    VMItem* temp = new VMItem(this,imgWidth,imgHeight);
+    connect(temp->getVMItem() , &ImgForm::loadDone , this , &MainWindow::dealImgFormSignal_loadDone);
 
-    connect(temp , &ImgForm::signal_delete , this , &MainWindow::do_signal_delete);
+    connect(temp->getVMItem() , &ImgForm::signal_delete , this , &MainWindow::do_signal_delete);
     return temp;
 }
 
@@ -892,29 +902,35 @@ void MainWindow::addPauseToBat()
 
 void MainWindow::do_triggered_action_INSERT_NEW_IMGFORM()
 {
-    int i = 0;
-    for(auto imgIter = vector_ImgForm.begin() ; imgIter != vector_ImgForm.end() ; ++imgIter)
+
+//    for(auto imgIter = vector_VMItem.begin() ; imgIter != vector_VMItem.end() ; ++imgIter)
+//    {
+
+//        if(imgIter->data()->getVMItem()->pos().x() > rightKeyMenuePos.x()\
+//                && imgIter->data()->getVMItem()->pos().x() - rightKeyMenuePos.x() < 3*interval)
+//        {
+//            VMItem* temp = getNewVMItem();
+
+//            vector_VMItem.insert(imgIter,temp);
+//            if(vector_VMItem.size() > 2)
+//                pos++;
+//            this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_VMItem.size()-1));
+//            return;
+//        }
+//        i++;
+//    }
+    for(int i = 0 ; i < vector_VMItem.size() ; i++)
     {
-
-        if(imgIter->data()->pos().x() > rightKeyMenuePos.x()\
-                && imgIter->data()->pos().x() - rightKeyMenuePos.x() < 3*interval)
+        if(vector_VMItem[i]->getVMItem()->pos().x() > rightKeyMenuePos.x()\
+                                && vector_VMItem[i]->getVMItem()->pos().x() - rightKeyMenuePos.x() < 3*interval)
         {
-            QPointer<ImgForm> temp = getNewImgForm();
-//            vector_ImgForm.append(temp);
-//            cout<<"IMGNAME:"<<imgIter->data()->getFileName()<<endl;
-//            cout<<"size:"<<vector_ImgForm.size()<<endl;
-            vector_ImgForm.insert(imgIter,temp);
-//            cout<<"size:"<<vector_ImgForm.size()<<endl;
-//          cout<<"IMGNAME:"<<imgIter->data()->getFileName()<<endl;
-//            cout<<"IMGNAME:"<<vector_ImgForm[i].data()->getFileName()<<endl;
-
-//      connect(vector_ImgForm[i] , &ImgForm::loadDone , this , &MainWindow::dealImgFormSignal_loadDone);
-            if(vector_ImgForm.size() > 2)
+            VMItem* temp = getNewVMItem();
+            vector_VMItem.insert(vector_VMItem.begin()+i,temp);
+            if(vector_VMItem.size() > 2)
                 pos++;
-            this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_ImgForm.size()-1));
+            this->label->setText(QString::number(pos+1)+"/"+QString::number(vector_VMItem.size()-1));
             return;
         }
-        i++;
     }
 }
 
@@ -938,6 +954,8 @@ void MainWindow::on_actionexport_triggered()
     connect(vedioParameEdit,&Dialog_VideoJParameterSetting::signal_videoParameters,
             [&](Dialog_VideoJParameterSetting::Parameters parameters){
             _parameters = parameters;
+            this->videoWidth = parameters.w;
+            this->videoHeight = parameters.h;
 //            cout<<"收到参数\n";
     });
     if(vedioParameEdit->exec() == QDialog::Accepted)
@@ -955,6 +973,8 @@ void MainWindow::on_action_export_triggered()
     connect(vedioParameEdit,&Dialog_VideoJParameterSetting::signal_videoParameters,
             [&](Dialog_VideoJParameterSetting::Parameters parameters){
             _parameters = parameters;
+            this->videoWidth = parameters.w;
+            this->videoHeight = parameters.h;
             cout<<"收到参数\n";
     });
     if(vedioParameEdit->exec() == QDialog::Accepted)
@@ -994,9 +1014,13 @@ void MainWindow::on_action_import_triggered()
         "Open BGM", "/home", "Music Files (*.mp3 *.avi *)");
     for(size_t i = 0 ; i < tempfileNames.size() ; i++)
     {
-        auto end = vector_ImgForm.end();
-        (end-1)->data()->SetFileName(tempfileNames[i]);
+
+//        auto end = vector_VMItem.end();
+//        (end-1)->data()->getVMItem()->SetFileName(tempfileNames[i]);
+        vector_VMItem[vector_VMItem.size()-1]->getVMItem()->SetFileName(tempfileNames[i]);
     }
+
+//QList<VMItem *>::iterator
 }
 
 void MainWindow::slot_readdata()
@@ -1024,6 +1048,32 @@ void MainWindow::slot_cmdfinished()
 
     /* 信息输出 */
     cout << "Cmd finish:" << flag << endl;
+}
+
+void MainWindow::do_signalProcessInformationText(QString processInformationText)
+{
+    this->processLog->append(processInformationText);
+}
+
+void MainWindow::do_signalProcess(double pro)
+{
+    this->progressBar->setValue(this->progressBar->maximum()*pro);
+    auto text = _stage +"进度为:"+ QString::number(100*pro) +"%\n";
+    this->processLog->append(text);
+    cout<<text<<endl;
+    update();
+}
+
+void MainWindow::do_signalNextStage(QString stage)
+{
+    _stage = stage;
+    cout<<_stage<<endl;
+    this->progressBar->setFormat(stage);
+}
+
+void MainWindow::do_signalNewImg(QImage img)
+{
+//    this->label_temp->setPixmap(QPixmap::fromImage(img.scaled(100,100)));
 }
 
 

@@ -7,15 +7,17 @@
 #include<QFileInfo>
 #include<QDir>
 #include<QApplication>
-EditImgForm::EditImgForm(QString fileName, QWidget *parent):
+EditImgForm::EditImgForm(QString fileName,QImage image, QWidget *parent):
     QMainWindow(parent)
 {
     setupUi(this);
 //    this->hide();
-    QMessageBox::information(NULL,"","原始文件路径为:" + QDir(fileName).absolutePath());
+//    QMessageBox::information(NULL,"","原始文件路径为:" + QDir(fileName).absolutePath());
 //    this->installEventFilter(this);
 
     this->fileName = fileName;
+    this->img = image;
+    this->resourceImg = image;
     timer = new QTimer(this);
     timer->setInterval(100);//10fps
     //note:奇怪的bug,这样做才能正常刷新
@@ -23,17 +25,12 @@ EditImgForm::EditImgForm(QString fileName, QWidget *parent):
     timer->start();
     init();
 
-//    img = QImage(fileName);
-//    if(img.isNull())
-//    {
-//        QMessageBox::information(NULL,"","获取图片失败:"+QDir(fileName).absolutePath());
-//        this->close();
-//    }
-//    imgWidth = img.width();
-//    imgHeight = img.height();
+    imgWidth = img.width();
+    imgHeight = img.height();
 //    QMessageBox::information(NULL,"","图片大小为:"+QString::number(imgWidth)+"X"+QString::number(imgHeight));
 
 }
+
 
 EditImgForm::~EditImgForm()
 {
@@ -93,28 +90,9 @@ void EditImgForm::init()
 
 void EditImgForm::drawImg()
 {
-//    img = QImage(fileName);
     QFile file(fileName);
-    if(!img.load(fileName))
-    {
-        QFile file(fileName);
-        if(!file.isOpen())
-        {
-            QMessageBox::information(NULL,"",fileName+"打开失败");
-            this->close();
-            return;
-        }
-        img.loadFromData(file.readAll());
-    }
-    if(img.isNull() || img.width() == 0)
-    {
-        QMessageBox::information(NULL,"","获取图片失败:"+QDir(fileName).absolutePath());
-        this->close();
-    }
     auto w = this->screen()->geometry().width();
-    cout<<"screen width"<<w<<endl;
-    imgWidth = img.width();
-    imgHeight = img.height();
+//    cout<<"screen width"<<w<<endl;
 //    QMessageBox::information(NULL,"","图片大小为:"+QString::number(imgWidth)+"X"+QString::number(imgHeight));
 //    imgHeight = vc->get(CAP_PROP_FRAME_HEIGHT);
 //    imgWidth = vc->get(CAP_PROP_FRAME_WIDTH);
@@ -212,6 +190,22 @@ void EditImgForm::paintEvent(QPaintEvent *e)
 
 void EditImgForm::wheelEvent(QWheelEvent *e)
 {
+    //ctrl + 滚动 resize
+    if(QApplication::keyboardModifiers() == Qt::ControlModifier)//ctrl键的判断
+    {
+        double per = e->angleDelta().y() / 1000.0;
+        int newW = imgWidth*(1 + per);
+        int newH = imgHeight*(1 + per);
+        cout<<"percentage: "<<per<<endl;
+        this->img = this->resourceImg.scaled(QSize(newW,newH),Qt::KeepAspectRatio);
+        cout<<"new size: "<<this->img.size()<<endl;
+        imgWidth = this->img.width();
+        imgHeight = this->img.height();
+
+        e->accept();
+        return;
+    }
+
     //添加图片滚动
     //if(std::abs(topY) <= imgHeight)
         topY += e->angleDelta().y();
@@ -219,11 +213,8 @@ void EditImgForm::wheelEvent(QWheelEvent *e)
         {
             t.move(t.x(),t.y() + e->angleDelta().y());
         }
-//        update();
-//        update();
         repaint();
-//        showNormal();
-//        adjustSize();
+        e->accept();
 }
 
 void EditImgForm::mousePressEvent(QMouseEvent *e)
