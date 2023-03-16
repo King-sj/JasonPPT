@@ -18,7 +18,7 @@ class EditImgForm : public QMainWindow, private Ui::EditImgForm
 
 public:
     EditImgForm(QWidget *parent = nullptr) = delete;
-    EditImgForm(QString fileName,QWidget *parent = nullptr) ;
+    EditImgForm(QString fileName,QImage image,QWidget *parent = nullptr);
     ~EditImgForm();
     enum class TYPE{NONE,IMG,VIDEO};
     enum RIGHT_KEY_MENU{IMPORT_TEXT};
@@ -44,6 +44,7 @@ private:
 //    VideoCapture* vc;
     TYPE type = TYPE::NONE;
     QImage img;
+    QImage resourceImg;
     int imgWidth = 0;
     int imgHeight = 0;
     int topY = 10;

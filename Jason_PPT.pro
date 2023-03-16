@@ -4,27 +4,30 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
 #CONFIG += release
-#CONFIG += debug
-#CONFIG += Wall
-#CONFIG += Wextra
-#CONFIG += fsanitize=undefined
-#CONFIG += fsanitize=address
+CONFIG += debug
+CONFIG += Wall
+CONFIG += Wextra
+CONFIG += fsanitize=undefined
+CONFIG += fsanitize=address
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    ComposeVideoManager.cpp \
     Dialog_SingleImgFormConfig.cpp \
     Dialog_VideoJParameterSetting.cpp \
     EditImgForm.cpp \
     ImgForm.cpp \
     PlayVideo.cpp \
     RectText.cpp \
+    VMItem.cpp \
     main.cpp \
     MainWindow.cpp
 
 HEADERS += \
+    ComposeVideoManager.h \
     Dialog_SingleImgFormConfig.h \
     Dialog_VideoJParameterSetting.h \
     EditImgForm.h \
@@ -32,7 +35,8 @@ HEADERS += \
     MainWindow.h \
     PlayVideo.h \
     RectText.h \
-    Share.h
+    Share.h \
+    VMItem.h
 
 FORMS += \
     Dialog_SingleImgFormConfig.ui \
@@ -49,12 +53,19 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 RESOURCES += \
 	Resource.qrc
 
+
+##msvc {
+#    QMAKE_CFLAGS += /utf-8
+##    QMAKE_CXXFLAGS += /utf-8
+#    QMAKE_CXXFLAGS += /source-charset:utf-8 /execution-charset:utf-8
+##}
+
 INCLUDEPATH += D:\OpenCV\opencv\build\include \
 		D:\OpenCV\opencv\build\include\opencv2
 #		D:\OpenCV\opencv\build\x64\vc15\lib
-LIBS += D:\OpenCV\opencv\build\x64\vc15\lib\opencv_world460.lib
+#LIBS += D:\OpenCV\opencv\build\x64\vc15\lib\opencv_world460.lib
 #note:debug模式必须使用下面这个
-#LIBS += D:\OpenCV\opencv\build\x64\vc15\lib\opencv_world460d.lib
+LIBS += D:\OpenCV\opencv\build\x64\vc15\lib\opencv_world460d.lib
 
 #	D:\OpenCV\opencv\build\x64\vc15\bin\opencv_videoio_msmf460_64d.dll
 #LIBS += D:\OpenCV\opencv\build\x64\vc15\bin\opencv_videoio_ffmpeg460_64.dll
