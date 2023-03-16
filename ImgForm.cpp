@@ -12,6 +12,8 @@
 #include"Dialog_SingleImgFormConfig.h"
 #include"EditImgForm.h"
 #include<stdio.h>
+using namespace std;
+using namespace cv;
 // ffmpeg 是纯 C 语言的代码，在 C++ 当中不能直接进行 include
 extern "C" {
     #include <libavcodec/avcodec.h>
@@ -23,16 +25,7 @@ extern "C" {
     #include <libavutil/mathematics.h>
     #include <libswresample/swresample.h>
 }
-//#include<opencv2/core//utils/logger.hpp>
-//////////////////////////////////////////
-//#include <opencv2/core/bufferpool.hpp>
 
-//#include <opencv2/imgproc/imgproc.hpp>
-//#include <opencv2/objdetect/objdetect.hpp>
-//#include <opencv2/ml/ml.hpp>
-//#include <opencv2/core/core.hpp>
-//using namespace cv::ml;
-///////////////////////////////////////////////
 
 /************************note:debug***************************************************************/
 #define cout qDebug()<<"["<<__LINE__<<":"<<__FILE__<<":"<<__FUNCTION__<<"]"
@@ -42,7 +35,7 @@ ImgForm::ImgForm(QWidget *p,int w,int h,int x,int y)
 {
     this->setParent(p);
 
-    this->setStyleSheet("ImgForm{background-color:rgb(255,100,100)}");
+    this->setStyleSheet("ImgForm{background-color:rgb(0,250,154)}");
     this->move(x,y);
     width = w;
     height = h;
@@ -60,6 +53,8 @@ ImgForm::~ImgForm()
         delete playVideo;
     playVideo = NULL;
 }
+
+
 
 void ImgForm::moveToLeft()
 {
@@ -162,7 +157,7 @@ bool ImgForm::getIsSpecial()
 void ImgForm::edit()
 {
 //    QMessageBox::information(NULL,"",this->fileName);
-    auto pMainEditWindow = new EditImgForm(fileName,this);
+    auto pMainEditWindow = new EditImgForm(fileName,this->img,this);
 
     pMainEditWindow->setWindowModality(Qt::WindowModal);//模态
     //关闭后自动释放窗口,不需要自己释放pMyMainWindow
@@ -269,7 +264,7 @@ void ImgForm::onTaskBoxContextMenuEvent()
 
 
     int iType = pEven->data().toInt();
-
+//    cout<<iType<<" / "<<RIGHT_KEY_MENU::CHANGE_DEFAULT_CONFIG<<endl;
     switch (iType)
     {
     case RIGHT_KEY_MENU::DELETE_IMG_FORM:
@@ -301,8 +296,8 @@ void ImgForm::do_CHANGE_DEFAULT_CONFIG()
         isSpecial = false;
     }else{
         isSpecial = true;
+//        this->update();
     }
-
     delete dialog;
     dialog = NULL;
 }

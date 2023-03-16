@@ -65,7 +65,7 @@
    <property name="geometry">
     <rect>
      <x>60</x>
-     <y>170</y>
+     <y>230</y>
      <width>311</width>
      <height>41</height>
     </rect>
@@ -117,7 +117,7 @@
    <property name="geometry">
     <rect>
      <x>50</x>
-     <y>230</y>
+     <y>290</y>
      <width>321</width>
      <height>31</height>
     </rect>
@@ -158,6 +158,32 @@
        </widget>
       </item>
      </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QWidget" name="layoutWidget_4">
+   <property name="geometry">
+    <rect>
+     <x>60</x>
+     <y>160</y>
+     <width>311</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_8">
+    <item>
+     <widget class="QLabel" name="label_filename">
+      <property name="text">
+       <string>生成视频名称:</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLineEdit" name="lineEdit_filename">
+      <property name="text">
+       <string>result.mp4</string>
+      </property>
+     </widget>
     </item>
    </layout>
   </widget>

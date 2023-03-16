@@ -11,6 +11,7 @@ public:
     struct Parameters{
         int img_time_default;
         QString export_file_path;
+        QString export_filename;
         int fps;
         int w;
         int h;

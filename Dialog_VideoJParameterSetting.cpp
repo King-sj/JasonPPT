@@ -17,7 +17,7 @@ void Dialog_VideoJParameterSetting::accept()
     _parameters.h = lineEdit_height->text().toInt();
     _parameters.w = lineEdit_width->text().toInt();
     _parameters.img_time_default = lineEdit_img_time->text().toInt();
-
+    _parameters.export_filename = lineEdit_filename->text();
     emit signal_videoParameters(_parameters);
     //调用父类
     QDialog::accept();

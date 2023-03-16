@@ -7,8 +7,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include"PlayVideo.h"
-using namespace std;
-using namespace cv;
+
 //class PlayVideo;//前置声明
 class ImgForm : public QLabel
 {
