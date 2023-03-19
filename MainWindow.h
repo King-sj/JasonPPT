@@ -78,6 +78,8 @@ private slots:
     void do_signalProcess(double pro);
     void do_signalNextStage(QString stage);
     void do_signalNewImg(QImage img);
+    void on_actioncreate_new_project_triggered();
+
 private:
     virtual void paintEvent(QPaintEvent* e)override;
     virtual void mousePressEvent(QMouseEvent* e)override;

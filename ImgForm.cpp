@@ -463,6 +463,7 @@ bool ImgForm::createPreviewWidthFile(const char *file){
             }
         }
     }
+    this->deaultTime = fmt_ctx_->duration/1000000;//us->s
     //释放资源
     av_frame_free(&temp_frame);
     av_packet_free(&pkt);

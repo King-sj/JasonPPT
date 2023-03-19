@@ -26,56 +26,14 @@ MainWindow::MainWindow(QWidget *parent)
     setupUi(this);
 
 
-//#if (QT_VERSION <= QT_VERSION_CHECK(5,0,0))
-//#if _MSC_VER
-//QTextCodec *codec = QTextCodec::codecForName("gbk");
-//#else
-//QTextCodec *codec = QTextCodec::codecForName("utf-8");
-//#endif
-//QTextCodec::setCodecForLocale(codec);
-//QTextCodec::setCodecForCStrings(codec);
-//QTextCodec::setCodecForTr(codec);
-//#else
-//QTextCodec *codec = QTextCodec::codecForName("utf-8");
-//QTextCodec::setCodecForLocale(codec);
-//#endif
-
-//    initFFMPEG();
-
-//    av_register_all();//已弃用
-//    avformat_network_init();//not need
-
-    /*
-     * 放setupUI后创建，否则无反应
-    */
-    //bug:此处突然崩溃了{拒绝绘制}{date:2023/3/15}
-//    this->showMaximized();
-
-    this->label_temp->hide();
+    this->label_temp->hide();//it's just to test
 
     setFocus();//获取焦点
     vector_VMItem.clear();
     vedioParameEdit = nullptr;
     playVideo = NULL;
     init();
-    rebuiltFolder();
-//    cout<<"mainWindow:"<<QThread::currentThreadId()<<endl;
 
-    /*
-//     * 多线程播放视频
-//    */
-//    playVideoThread = new QThread();
-//    playVideo = new PlayVideo();
-//    playVideo->moveToThread(playVideoThread);
-//    playVideoThread->start();
-//    //线程结束事件
-//    connect(playVideoThread,&QThread::finished,playVideo,&QObject::deleteLater);//销毁对象
-//    connect(playVideoThread,&QThread::finished,playVideoThread,&QThread::deleteLater);//多线程自销毁
-//    //启动线程类的任何方法都应该通过信号-槽
-
-//    this->progressBar->hide();
-//________________________________________________________________________________________________________//
-    //视频合成线程管理类
     composeVideoManager = new ComposeVideoManager();
     composeVideoManagerThread = new QThread();
     composeVideoManager->moveToThread(composeVideoManagerThread);
@@ -95,17 +53,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     composeVideoManagerThread->start();
 
-//________________________________________________________________________________________________________//
-
-    this->progressBar->setVisible(false);
-    this->progressBar->setTextVisible(false);
-    this->progressBar->setMinimum(0);
-
-    process = nullptr;
-
-    this->processLog->setText("运行结果为:\n");
-    this->processLog->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    this->processLog->hide();
 }
 
 MainWindow::~MainWindow()
@@ -120,28 +67,35 @@ MainWindow::~MainWindow()
     if(vedioParameEdit)
         delete vedioParameEdit;
     vedioParameEdit = nullptr;
-//    for(auto& t:vector_VMItem)
-//    {
-//        delete t;
-//        t = nullptr;
-//    }
     vector_VMItem.clear();
-//    /*
-//     * 结束线程
-//    */
-//    if(playVideoThread)
-//    {
-//        playVideoThread->quit();
-//    }
-//    playVideoThread->wait();
-    //不应该手动删除线程    QString targetBatFileName = QDir("./temp.bat").absolutePath();
-//    addPauseToBat();
 }
 
 void MainWindow::init()
 {
+    if(vector_VMItem.size() > 0 ){
+        for(int i = 0 ; i < vector_VMItem.size() ;i++)
+        {
+            delete vector_VMItem[i];
+            vector_VMItem[i] = nullptr;
+        }
+        vector_VMItem.clear();
+    }
+    rebuiltFolder();
+    pos = 0;
     VMItem* temp = getNewVMItem();
     vector_VMItem.append(temp);
+
+    this->progressBar->setVisible(false);
+    this->progressBar->setTextVisible(false);
+    this->progressBar->setMinimum(0);
+
+    process = nullptr;
+
+    this->processLog->setText("运行结果为:\n");
+    this->processLog->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    this->processLog->hide();
+
+    update();
 }
 
 inline QPoint MainWindow::getCenterPointForRectRegion(int width, int height)
@@ -157,13 +111,16 @@ void MainWindow::paintEvent(QPaintEvent *e)
     for(auto& img : vector_VMItem)
     {
         img->getVMItem()->hide();
+        img->getimeLabel()->hide();
     }
+//    cout<<"vector_VMItem.size():"<<vector_VMItem.size()<<endl;
     for(int i = pos ; i < vector_VMItem.size() ; i++)
     {
         vector_VMItem[i]->getVMItem()->move(centerP.x() + (i - pos)*(imgWidth+interval) + border, centerP .y());
         if(vector_VMItem[i]->getVMItem()->geometry().x() > this->width())
             break;
         vector_VMItem[i]->getVMItem()->show();
+        vector_VMItem[i]->getimeLabel()->show();
     }
     //左边的
     for(int i = pos - 1 ; i >= 0 ; i--)
@@ -172,6 +129,7 @@ void MainWindow::paintEvent(QPaintEvent *e)
         if(vector_VMItem[i]->getVMItem()->geometry().y() < -imgWidth)
             break;
         vector_VMItem[i]->getVMItem()->show();
+        vector_VMItem[i]->getimeLabel()->show();
     }
 
     this->processLog->resize(this->processLog->width(),
@@ -722,6 +680,7 @@ void MainWindow::rebuiltFolder()
     }
     QDir dir("./");
     dir.mkpath("temp/imgs");
+    dir.mkpath("temp/audio");
     dir.mkpath("temp/result");
 }
 
@@ -1060,7 +1019,7 @@ void MainWindow::do_signalProcess(double pro)
     this->progressBar->setValue(this->progressBar->maximum()*pro);
     auto text = _stage +"进度为:"+ QString::number(100*pro) +"%\n";
     this->processLog->append(text);
-    cout<<text<<endl;
+//    cout<<text<<endl;
     update();
 }
 
@@ -1280,4 +1239,10 @@ void MainWindow::do_signalNewImg(QImage img)
 
 //    avformat_free_context(kAVFormatContext);   /*释放上下文*/
 //}
+
+
+void MainWindow::on_actioncreate_new_project_triggered()
+{
+    init();
+}
 

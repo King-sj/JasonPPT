@@ -2,6 +2,7 @@
 #include<QDir>
 #include<QPainter>
 #include<QProcess>
+#include<QFileInfo>
 //#include<opencv2/opencv.hpp>
 #include<opencv2\imgproc\types_c.h>
 #if _MSC_VER >= 1600
@@ -10,20 +11,33 @@
 ComposeVideoManager::ComposeVideoManager(QObject *parent)
     : QObject{parent}
 {
+    isStop = true;
 }
 
 bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_VideoJParameterSetting::Parameters parameters,QVector<QString> musicFileNames)
 {
+    isStopMutex.lock();
+    if(!isStop)
+    {
+        emit signalProcessInformationText("仍在运行");
+        return false;
+    }
+    init();
+    isStop = false;
+    isStopMutex.unlock();
     setlocale(LC_ALL,"utf-8");
     QString text;
     _parameters = parameters;
      perFrameCnt = _parameters.fps;
      w = _parameters.w, h = _parameters.h;
-    fileAllName = QDir(_parameters.export_file_path+"/"+"/temp.mp4").absolutePath();//note:it's a video without audio
+    fileAllName = QDir("./temp/result/temp.mp4").absolutePath();//note:it's a video without audio
     if(fileAllName.toStdString() == "" || fileAllName.toStdString().size() == 0 || !QDir(QDir(_parameters.export_file_path).absolutePath()).exists())
     {
         text = "合成视频路径:"+fileAllName+" 无效";
         emit signalProcessInformationText(text);
+        isStopMutex.lock();
+        isStop = true;
+        isStopMutex.unlock();
         return false;
     }
 
@@ -45,7 +59,9 @@ bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_Vid
         vw->release();
         emit signalProcessInformationText(text);
 //        std::cout<<text.toStdString();
-
+        isStopMutex.lock();
+        isStop = true;
+        isStopMutex.unlock();
         return false;
     }
 
@@ -53,6 +69,7 @@ bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_Vid
     double proc = 1;//进度
 
 //    int time = 0;
+    int posTime = 0;//sec
     for(const auto& file : imgForms)
     {
         emit signalNextStage("合成视频中：");
@@ -66,7 +83,11 @@ bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_Vid
                 text = "第"+QString::number(proc)+"项解码失败";
                 emit signalProcessInformationText(text);
             }
+            posTime += file->getVMItem()->deaultTime;
         }else if(file->getVMItem()->getType() == ImgForm::TYPE::VIDEO){
+           QString audioName = getAudio(file->getVMItem()->getFileName());
+           this->audios.append(Audio(audioName,posTime,file->getVMItem()->deaultTime));
+           posTime += file->getVMItem()->deaultTime;
             writerVideo(file);
         }
         proc++;
@@ -79,7 +100,7 @@ bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_Vid
     text = "已合成无声视频！\n";
     emit signalProcessInformationText(text);
     // 处理完之后会在得到一个视频文件。
-
+    emit signalProcess(0.9);
     emit signalProcessInformationText("正在替换BGM\n");
 
     if(!musicFileNames.empty())
@@ -88,19 +109,35 @@ bool ComposeVideoManager::composeNewVideo(QVector<VMItem *> imgForms, Dialog_Vid
     }
     else
     {
+        cout<<"未添加音频"<<endl;
         emit signalProcessInformationText("未添加音频");
-        emit signalNextStage("合成结束");
+        addSilent(QDir("./temp/result/temp.mp4").absolutePath());
+//        emit signalNextStage("合成结束");
         return true;
     }
-    emit signalProcessInformationText("替换BGM结束\n");
-    emit signalNextStage("合成结束");
+    if(!QFileInfo("./temp/result/temp2.mp4").exists())
+    {
+        emit signalProcessInformationText("未添加bgm或添加失败");
+        addSilent(QDir("./temp/result/temp.mp4").absolutePath());
+    }
 
+    emit signalProcessInformationText("替换BGM结束\n");
+    emit signalProcessInformationText("添加视频原声道中\n");
+    recoverVideoAudio();
+    emit signalProcessInformationText("添加视频原声道结束\n");
+    emit signalProcess(1);
+    emit signalNextStage("合成结束");
+    isStopMutex.lock();
+    isStop = true;
+    isStopMutex.unlock();
     return true;
 }
 
 void ComposeVideoManager::init()
 {
-
+    audios.clear();
+    isStop = true;
+    CapPos = 0;
 }
 
 QString ComposeVideoManager::getFormatTime(int seconds)
@@ -140,6 +177,104 @@ QString ComposeVideoManager::getFormatTime(int seconds)
     ans+=".000";
     return ans;//such as 00:00:00.000
 }
+
+QString ComposeVideoManager::getAudio(QString videoFileName)
+{
+    QString cmd= "";
+    QString resultAudioPath = QDir("./temp/audio/" + QFileInfo(videoFileName).baseName()+".mp3").absolutePath();
+    int q = 0;//音频质量开最高
+    cmd +=  QDir("./ffmpeg/bin/ffmpeg.exe").absolutePath()+" -i "+QDir(videoFileName).absolutePath()+" -vn -c:a libmp3lame -q:a "+QString::number(q)
+            +" "+resultAudioPath;
+    QProcess pro(this);
+    pro.setProgram("cmd");
+    QStringList arg;
+    arg<<"/c"<<cmd;
+    pro.setArguments(arg);
+
+    pro.start();
+    pro.waitForStarted();
+    pro.waitForFinished(-1);//wait end
+    QString temp=pro.readAllStandardOutput(); //程序输出信息
+    emit signalProcessInformationText(temp);
+    return resultAudioPath;
+}
+
+void ComposeVideoManager::recoverVideoAudio()
+{
+//    QString cmd=  QDir("./ffmpeg/bin/ffmpeg.exe").absolutePath()+" -i "+QDir("./temp/result/temp2.mp4").absolutePath();//输入temp2
+    QStringList list;
+    /*例子
+     ffmpeg -i D:\code\build-Jason_PPT-Desktop_Qt_6_4_1_MSVC2019_64bit-Debug\temp\result\result.mp4
+            -i D:\Resource\audio\devil_laughing3.mp3
+            -i D:\code\build-Jason_PPT-Desktop_Qt_6_4_1_MSVC2019_64bit-Debug\temp\audio\01.mp3
+            -filter_complex
+            "[1]adelay=6000|6000[aud1];[2]adelay=0|0[aud2]; [0][aud1][aud2]amix=3"
+            -c:v copy finish.mp4
+    */
+    list<<"-i"<<QDir("./temp/result/temp2.mp4").absolutePath();
+    QString resulPath = QDir(_parameters.export_file_path+"/"+_parameters.export_filename).absolutePath();
+    for(int i = 0 ; i < this->audios.size() ; i++)
+    {
+        list<<"-i"<<QDir(this->audios[i].audioFileName).absolutePath();//输入音频
+    }
+    list<<"-filter_complex";//会自动添加引号
+    QString tmp = "";
+    for(int i = 0 ; i < this->audios.size() ; i++)
+    {
+        tmp+= (("[" +QString::number(i+1) +"]adelay=" +QString::number(this->audios[i].beginTime*1000))+"|"+QString::number(this->audios[i].beginTime*1000)//左右声道都延迟播放
+                +"[aud"+QString::number(i+1)+"];");
+    }
+    tmp+="[0]";//选中第一个输入(视频)，note:必须有声道
+    for(int i = 0 ; i < this->audios.size() ; i++)
+    {
+        tmp += "[aud"+QString::number(i +1)+"]";
+    }
+    tmp +=("amix=" + QString::number(this->audios.size() +1 )) ;
+    list<<tmp;
+    list<<"-c:v"<<"copy"<<resulPath;
+    cout<<list<<endl;
+//    QProcess pro(this);
+//    pro.setProgram("cmd");
+//    QStringList arg;
+//    arg<<"/k"<<cmd;
+//    pro.setArguments(arg);
+//    pro.start();
+
+    QProcess *ffmpeg_proc = new QProcess(this);
+    ffmpeg_proc->setProcessChannelMode(QProcess::SeparateChannels);
+    ffmpeg_proc->start(QDir("./ffmpeg/bin/ffmpeg.exe").absolutePath(),list);
+    ffmpeg_proc->waitForStarted();
+    ffmpeg_proc->waitForFinished(-1);
+    QString temp=ffmpeg_proc->readAllStandardOutput(); //程序输出信息
+//    pro.waitForStarted();
+//    pro.waitForFinished(-1);//wait end
+//    QString temp=pro.readAllStandardOutput(); //程序输出信息
+    emit signalProcessInformationText(temp);
+
+
+    return ;
+}
+
+void ComposeVideoManager::addSilent(QString srcfileName)
+{
+    QString cmd= "";
+    cmd +=  QDir("./ffmpeg/bin/ffmpeg.exe").absolutePath()
+            +" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -i "+QDir(srcfileName).absolutePath()+" -c:v copy -c:a aac -shortest "
+            + QDir("./temp/result/temp2.mp4").absolutePath();
+    cout<<cmd<<endl;
+    QProcess pro(this);
+    pro.setProgram("cmd");
+    QStringList arg;
+    arg<<"/c"<<cmd;
+    pro.setArguments(arg);
+
+    pro.start();
+    pro.waitForStarted();
+    pro.waitForFinished(-1);//wait end
+    QString temp=pro.readAllStandardOutput(); //程序输出信息
+    emit signalProcessInformationText(temp);
+    return;
+}
 void ComposeVideoManager::mergeVideoAndBgm(QString _videoFileName,const QVector<QString>& _musicFileNames)
 {
     _videoFileName = QDir(_videoFileName).absolutePath();
@@ -155,13 +290,16 @@ void ComposeVideoManager::mergeVideoAndBgm(QString _videoFileName,const QVector<
     QString sTime(getFormatTime(iTime));
 
     QString targetMusic ="";
-    for(auto& _musicFileName : _musicFileNames)
+    for(auto& _musicFileName_ : _musicFileNames)
     {
 //        _musicFileName = QDir(_musicFileName).absolutePath();
 
         //暂不处理音乐时长不够的问题
-        targetMusic += "file " + QString("'")+QDir(_musicFileName).absolutePath()+QString("'");
+        QString au = QDir(_musicFileName_).absolutePath();
+        if(QFileInfo(au).isFile())
+            targetMusic += ("file " + QString("'") + au +QString("'\n"));
     }
+    emit signalProcessInformationText(targetMusic);
     //
     QString musicFileNames_txt ="./temp/targetBgm.txt";
     QFile targetMusicFile(musicFileNames_txt);
@@ -192,7 +330,9 @@ void ComposeVideoManager::mergeVideoAndBgm(QString _videoFileName,const QVector<
 
     bat += spilitMusitToSameLengthOfVideo +"\n";
     cmd += " && ";
-    auto mergeMusicAndVideo =  ffmpeg + " -i " + QDir("./temp/result.mp3").absolutePath() +" -i " + _videoFileName + " -y " + QDir(_parameters.export_file_path+"/"+_parameters.export_filename).absolutePath();//合并音视频
+    //note: -crf 0,无损
+    auto mergeMusicAndVideo =  ffmpeg + " -i " + QDir("./temp/result.mp3").absolutePath() +" -i " + _videoFileName
+            + " -crf "+QString::number(_parameters.crf)+" -y " + QDir(_parameters.export_file_path+"/"+"temp2.mp4").absolutePath();//合并音视频
     cmd += mergeMusicAndVideo;
     bat += mergeMusicAndVideo + "\n" ;//+ "pause";
 
@@ -345,7 +485,7 @@ bool ComposeVideoManager::writerVideo(VMItem *video)
         return false;
     }
     QImage tmpImg;
-    emit signalNextStage("解码视频:"+video->getVMItem()->getFileName());
+    emit signalNextStage("解码视频中:");
     for(Mat mat;vc.isOpened();)
     {
         vc>>mat;

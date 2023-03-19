@@ -15,6 +15,7 @@ public:
         int fps;
         int w;
         int h;
+        int crf;//视频质量
     }_parameters;
 private:
 signals:
@@ -22,5 +23,7 @@ signals:
 
 public slots:
     virtual void accept() override;
+private slots:
+    void on_pushButton_setOutPutFile_clicked();
 };
 

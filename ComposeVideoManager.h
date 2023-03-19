@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <QObject>
 #include<QVector>
+#include<QMutex>
 #include"VMItem.h"
 #include"Dialog_VideoJParameterSetting.h"
 #if _MSC_VER >= 1600
@@ -29,8 +30,18 @@ class ComposeVideoManager : public QObject
 public:
     explicit ComposeVideoManager(QObject *parent = nullptr);
     bool composeNewVideo(QVector<VMItem*> imgForms,Dialog_VideoJParameterSetting::Parameters parameters,QVector<QString> musicFileNames);
+    struct Audio{
+        QString audioFileName;
+        int beginTime;//sec
+        int time;//long
+    public:
+        Audio(QString audioFileName,int beginTime,int time):audioFileName(audioFileName),beginTime(beginTime),time(time){};
+    };
+
 private:
     Dialog_VideoJParameterSetting::Parameters _parameters;
+    QMutex isStopMutex;
+    bool isStop = true;
 private:
     void init();
     bool writerImg(VMItem* img);
@@ -46,6 +57,14 @@ private:
     int getVideoFPS(QString fileName);
     QString changeVideoFPS(QString _fileName,int fps);
     QSize getVideoSize(QString fileName);
+
+    bool rgb2mp4();
+    int rgb2mp4Encode(AVCodecContext* codecCtx, AVFrame* yuvFrame, AVPacket* pkt, AVStream* vStream, AVFormatContext* fmtCtx);
+    void mergeVideoAndBgm(QString _videoFileName,const QVector<QString>& _musicFileNames);
+    QString getFormatTime(int seconds);
+    QString getAudio(QString videoFileName);
+    void recoverVideoAudio();
+    void addSilent(QString srcfileName);
 private:
     QString fileAllName;
     VideoWriter* vw;
@@ -66,10 +85,7 @@ private:
 //    uint8_t *intBuffer = 0;                           // 图片数据缓冲区
 
 //    int64_t next_pts = 0;                               //下一帧位置
-    bool rgb2mp4();
-    int rgb2mp4Encode(AVCodecContext* codecCtx, AVFrame* yuvFrame, AVPacket* pkt, AVStream* vStream, AVFormatContext* fmtCtx);
-    void mergeVideoAndBgm(QString _videoFileName,const QVector<QString>& _musicFileNames);
-    QString getFormatTime(int seconds);
+
 private:
     int ret = -1;
     AVFormatContext* fmtCtx = NULL;
@@ -91,6 +107,8 @@ private:
     int yuvSize;
 
     int64_t CapPos = 0;
+
+    QVector<Audio>audios;
 signals:
     void signalProcessInformationText(QString processInformationText);
     void signalProcess(double pro);

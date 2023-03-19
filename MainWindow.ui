@@ -147,8 +147,8 @@
     </property>
     <addaction name="action_import"/>
     <addaction name="action_export"/>
-    <addaction name="action_play_vedio"/>
     <addaction name="actionImportMusic"/>
+    <addaction name="actioncreate_new_project"/>
    </widget>
    <addaction name="menu"/>
   </widget>
@@ -171,6 +171,11 @@
   <action name="actionImportMusic">
    <property name="text">
     <string>替换bgm</string>
+   </property>
+  </action>
+  <action name="actioncreate_new_project">
+   <property name="text">
+    <string>新建项目</string>
    </property>
   </action>
  </widget>
